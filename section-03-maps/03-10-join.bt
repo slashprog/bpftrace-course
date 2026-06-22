@@ -1,0 +1,31 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    join() — correlating events
+ * Lecture:  3.10
+ * Usage:    sudo bpftrace 03-10-join.bt
+ *
+ * join() lets you correlate two map values by their keys,
+ * producing a side-by-side view.
+ *
+ *   join(@a, @b)
+ *
+ * Useful for "I have the latency for each process — show me
+ * the read count for the same process."
+ */
+
+BEGIN
+{
+    printf("Computing reads-per-process AND bytes-per-process, then joining.\n");
+}
+
+kprobe:vfs_read
+{
+    @reads[comm] = count();
+    @bytes[comm] = sum(arg2);
+}
+
+END
+{
+    printf("\n=== Joined: reads vs bytes (by process) ===\n");
+    join(@reads, @bytes);
+}

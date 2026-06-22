@@ -1,0 +1,12 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Count syscalls per process
+ * Domain:   syscalls
+ * Usage:    sudo bpftrace one-liners/syscalls/count-syscalls.bt
+ * Reaches for this when: "What is this process doing at the syscall level?"
+ */
+BEGIN { printf("Counting all syscalls. Ctrl-C after a few seconds.\n"); }
+tracepoint:raw_syscalls:sys_enter
+{
+    @[comm] = count();
+}

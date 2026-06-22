@@ -1,0 +1,36 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.13: CPU — on-CPU flame graph
+ *
+ * The story: "Where is CPU being spent? Show me a flame graph."
+ * The script: stack-profile a target process, output in folded
+ *             format that FlameGraph.pl can consume.
+ *
+ * Usage:    sudo TARGET_PID=1234 bpftrace 06-13-cpu-oncpu-flamegraph.bt > out.folded
+ *           ./flamegraph.pl out.folded > flame.svg
+ *
+ * Requires: Brendan Gregg's FlameGraph tools (https://github.com/brendangregg/FlameGraph)
+ */
+
+#ifndef TARGET_PID
+#define TARGET_PID 0
+#endif
+
+BEGIN
+{
+    printf("Sampling on-CPU stacks for PID %d (0 = all processes).\n", TARGET_PID);
+    printf("Run for 30+ seconds, then Ctrl-C.\n");
+    printf("Then: ./flamegraph.pl out.folded > flame.svg\n");
+}
+
+profile:hz:99
+/pid == TARGET_PID || TARGET_PID == 0/
+{
+    @stacks[kstack] = count();
+}
+
+END
+{
+    printf("\nFolded stack format (one stack per line, 'count stack'):\n");
+    print(@stacks, 999999);
+}

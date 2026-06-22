@@ -1,0 +1,65 @@
+#!/usr/bin/env bpftrace
+/*
+ * Capstone Phase 1: Triage
+ *
+ * The story: "Our API is slow. WHERE is the time going?"
+ * The approach: cast a wide net. Look at the syscall distribution
+ *               for the API process. What's the dominant cost?
+ *
+ * Usage:    sudo bpftrace 09-02-triage.bt
+ *           (with the slow-api.sh running and generating traffic)
+ */
+
+BEGIN
+{
+    printf("TRIAGE PHASE 1: System-wide latency view.\n");
+    printf("Watch what the slow-api.sh process is doing.\n\n");
+}
+
+tracepoint:raw_syscalls:sys_enter
+/pid == TARGET_PID || TARGET_PID == 0/
+{
+    // Aggregate by syscall name
+    @syscalls[comm, args->id] = count();
+}
+
+kprobe:vfs_read
+{
+    @reads[comm] = count();
+}
+
+kprobe:vfs_write
+{
+    @writes[comm] = count();
+}
+
+kretprobe:vfs_read
+{
+    if (@start[tid] > 0) {
+        $us = (nsecs - @start[tid]) / 1000;
+        @read_latency[comm] = hist($us);
+        delete(@start[tid]);
+    }
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+END
+{
+    printf("\n=== Syscall distribution by process (top entries) ===\n");
+    print(@syscalls, 20);
+
+    printf("\n=== vfs_read calls by process ===\n");
+    print(@reads);
+
+    printf("\n=== vfs_read latency histogram (μs) ===\n");
+    print(@read_latency);
+
+    printf("\nTriage conclusions to draw:\n");
+    printf("  - What syscalls dominate? (read = I/O bound, write = log bound, etc.)\n");
+    printf("  - What's the latency shape? (bimodal = cache misses)\n");
+    printf("  - What's the next drill-down target?\n");
+}

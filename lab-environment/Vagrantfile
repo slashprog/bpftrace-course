@@ -1,0 +1,47 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile for the bpftrace Udemy course lab
+# Usage: vagrant up && vagrant ssh
+#        cd /vagrant && sudo ./scripts/setup-lab.sh
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"  # Ubuntu 22.04 — closest to 24.04 on Vagrant Cloud
+  # Note: Vagrant doesn't have a 24.04 box yet. 22.04 works for the course
+  #       with minor adjustments (kernel 5.15 is supported by bpftrace).
+
+  config.vm.hostname = "bpftrace-lab"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name   = "bpftrace-lab"
+    vb.memory = "4096"
+    vb.cpus   = 2
+  end
+
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = "4096"
+    lv.cpus   = 2
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      bpftrace \
+      linux-headers-$(uname -r) \
+      linux-tools-$(uname -r) \
+      bpfcc-tools \
+      linux-tools-common \
+      clang \
+      llvm \
+      jq \
+      git \
+      curl
+
+    # Set recommended sysctls
+    sysctl -w kernel.unprivileged_bpf_disabled=1 || true
+    sysctl -w kernel.perf_event_paranoid=1 || true
+  SHELL
+
+  # Share the course directory into the VM
+  config.vm.synced_folder ".", "/vagrant"
+end

@@ -1,0 +1,15 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    ptrace events (process debugging)
+ * Domain:   security
+ * Usage:    sudo bpftrace one-liners/security/ptrace-events.bt
+ * Reaches for this when: "Is anything debugging other processes?"
+ * Note:     ptrace is a common attack vector (debugger injection)
+ */
+BEGIN { printf("Watching for ptrace calls. Will print each event.\n"); }
+tracepoint:syscalls:sys_enter_ptrace
+{
+    printf("[PTRACE] %s (pid %d) → request=%d target=%d\n",
+        comm, pid, args->request, args->pid);
+    @[comm] = count();
+}

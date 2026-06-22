@@ -1,0 +1,52 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    kprobe — kernel function entry
+ * Lecture:  4.2
+ * Usage:    sudo bpftrace 04-02-kprobe.bt
+ *
+ * kprobe:FUNC attaches a probe to the entry of a kernel function.
+ * On every call, your action block runs.
+ *
+ * What you can do here:
+ *   - Read arguments (arg0..argN, sarg0..sargN)
+ *   - Update maps (in-kernel aggregation)
+ *   - Call printf (but be careful — per-event printf is slow)
+ *
+ * Finding functions:
+ *   sudo bpftrace -l 'kprobe:vfs*'
+ *   sudo bpftrace -l 'kprobe:tcp_*'
+ *
+ * Check what arguments a function takes:
+ *   sudo bpftrace -lv 'kprobe:tcp_connect'
+ */
+
+BEGIN
+{
+    printf("Counting vfs_read calls (and their requested byte count).\n");
+}
+
+kprobe:vfs_read
+{
+    // vfs_read's signature:
+    //   ssize_t vfs_read(struct file *file, char *buf, size_t count, loff_t *pos)
+    //
+    // arg0 = pointer to struct file (don't deref directly — use BTF for that)
+    // arg1 = pointer to user buffer
+    // arg2 = requested byte count
+    // arg3 = pointer to file offset
+    @reads[comm]   = count();
+    @bytes[comm]   = sum(arg2);
+    @max_bytes[comm] = max(arg2);
+}
+
+END
+{
+    printf("\n=== Read calls by process ===\n");
+    print(@reads);
+
+    printf("\n=== Total bytes requested ===\n");
+    print(@bytes);
+
+    printf("\n=== Largest single read ===\n");
+    print(@max_bytes);
+}

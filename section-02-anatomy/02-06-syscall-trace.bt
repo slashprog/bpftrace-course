@@ -1,0 +1,45 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Tracing syscalls — a deep dive
+ * Lecture:  2.6
+ * Usage:    sudo bpftrace 02-06-syscall-trace.bt
+ *
+ * Two ways to trace syscalls:
+ *
+ *   1. tracepoint:raw_syscalls:sys_enter
+ *      - Fires for EVERY syscall (no arguments, just the count)
+ *      - High-volume; use aggregation
+ *
+ *   2. tracepoint:syscalls:sys_enter_<NAME>  (e.g., sys_enter_openat)
+ *      - Fires for SPECIFIC syscalls
+ *      - Has named args: args->filename, args->flags, etc.
+ *
+ * Use the named tracepoint when you care about a specific syscall.
+ * Use raw_syscalls when you want a firehose.
+ */
+
+BEGIN
+{
+    printf("Counting ALL syscalls. Open a browser, edit a file, run `ls` — they all show up.\n");
+    printf("Press Ctrl-C after ~5 seconds.\n");
+}
+
+// The firehose — every syscall on the system
+tracepoint:raw_syscalls:sys_enter
+{
+    @all_syscalls[comm] = count();
+}
+
+// A specific syscall — openat (the modern "open")
+tracepoint:syscalls:sys_enter_openat
+{
+    @opens[comm, str(args->filename)] = count();
+}
+
+END
+{
+    printf("\n=== Top 10 processes by syscall count ===\n");
+    print(@all_syscalls, 10);
+    printf("\n=== Top 10 most-opened files ===\n");
+    print(@opens, 10);
+}

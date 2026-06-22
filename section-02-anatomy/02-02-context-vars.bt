@@ -1,0 +1,43 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Built-in context variables
+ * Lecture:  2.2
+ * Usage:    sudo bpftrace 02-02-context-vars.bt
+ *
+ * Demonstrates the most useful built-in context variables.
+ * Every probe fires with these variables pre-populated —
+ * you don't have to do anything to get them.
+ *
+ *   pid     - Process ID of the running process
+ *   tid     - Thread ID (Linux thread ID == PID for single-threaded)
+ *   comm    - Process/thread command name (up to 16 chars)
+ *   cpu     - CPU ID where the event happened
+ *   nsecs   - Nanoseconds since boot (monotonic clock)
+ *   elapsed - Seconds since the bpftrace program started
+ *   kstack  - Kernel stack trace (kprobes only)
+ *   ustack  - User-space stack trace (uprobes only)
+ *   arg0..argN - First N arguments to the function
+ */
+
+BEGIN
+{
+    printf("Context variable demo. Run something in another terminal:\n");
+    printf("  cat /etc/hostname\n\n");
+}
+
+kprobe:vfs_read
+{
+    // These are all "free" — populated for you on every event
+    @by_comm[comm]   = count();  // group by process name
+    @by_cpu[cpu]     = count();  // group by CPU
+    @by_pid[pid]     = count();  // group by PID
+    @first_seen[pid] = nsecs;    // first time we saw this PID
+}
+
+END
+{
+    printf("\n=== Reads by process ===\n");
+    print(@by_comm);
+    printf("\n=== Reads by CPU ===\n");
+    print(@by_cpu);
+}

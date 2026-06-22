@@ -1,0 +1,61 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.2: Filesystem — read/write latency heatmaps
+ *
+ * The story: "The app is slow. Is it the disk or the filesystem?"
+ * The script: build latency histograms for both reads and writes.
+ *             If the histogram is bimodal (most fast, a few very slow),
+ *             it's likely page cache misses / disk seeks.
+ *
+ * Usage:    sudo bpftrace 06-02-files-read-latency.bt
+ */
+
+BEGIN
+{
+    printf("Tracing read/write latency. Read/write files to populate histograms.\n");
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+    @bytes_requested[comm] = sum(arg2);
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $us = (nsecs - @start[tid]) / 1000;
+    @read_latency[comm] = hist($us);
+    @read_total[comm] = count();
+    delete(@start[tid]);
+}
+
+kprobe:vfs_write
+{
+    @wstart[tid] = nsecs;
+}
+
+kretprobe:vfs_write
+/@wstart[tid]/
+{
+    $us = (nsecs - @wstart[tid]) / 1000;
+    @write_latency[comm] = hist($us);
+    delete(@wstart[tid]);
+}
+
+END
+{
+    printf("\n=== Read latency by process (μs) ===\n");
+    print(@read_latency);
+
+    printf("\n=== Write latency by process (μs) ===\n");
+    print(@write_latency);
+
+    printf("\n=== Total bytes requested by process ===\n");
+    print(@bytes_requested);
+
+    printf("\nReading the output:\n");
+    printf("  - Tight histogram at low values: page cache hits (fast)\n");
+    printf("  - Long tail: disk seeks (slow)\n");
+    printf("  - If both: cache pressure — consider adding RAM\n");
+}

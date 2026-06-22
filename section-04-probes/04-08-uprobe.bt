@@ -1,0 +1,44 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    uprobe — user-space function tracing
+ * Lecture:  4.8
+ * Usage:    sudo bpftrace 04-08-uprobe.bt
+ *
+ * uprobes let you trace ANY user-space function in ANY binary,
+ * no source code or recompilation needed.
+ *
+ * Syntax:
+ *   uprobe:/path/to/binary:FUNCTION
+ *   uretprobe:/path/to/binary:FUNCTION
+ *
+ * For this example we'll trace sleep() in /bin/sleep. In
+ * lecture 4.11 we trace MySQL/Postgres using USDT.
+ *
+ * To list available uprobe targets in a binary:
+ *   sudo bpftrace -l 'uprobe:/bin/sleep:*'
+ *
+ * To find the path of a running process's binary:
+ *   readlink -f /proc/$(pidof myapp)/exe
+ */
+
+BEGIN
+{
+    printf("Tracing sleep() in /bin/sleep. Run 'sleep 5' in another terminal.\n");
+    printf("You'll see a histogram of how long the sleep call took.\n");
+}
+
+// Note: uretprobe, not uprobe — we want to measure DURATION
+uretprobe:/bin/sleep:sleep
+{
+    @calls = count();
+    @duration_seconds = lhist(arg0 / 1000000, 0, 60, 1);  // arg0 is the seconds arg
+}
+
+END
+{
+    printf("\n=== sleep() calls ===\n");
+    print(@calls);
+
+    printf("\n=== sleep() duration (seconds) ===\n");
+    print(@duration_seconds);
+}

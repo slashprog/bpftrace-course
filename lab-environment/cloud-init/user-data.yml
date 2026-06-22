@@ -1,0 +1,32 @@
+#cloud-config
+# Cloud-init script for bpftrace lab VMs
+# Use with: cloud-init user-data on AWS, Oracle Cloud, GCP, etc.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - bpftrace
+  - linux-headers-generic
+  - linux-tools-generic
+  - bpfcc-tools
+  - linux-cloud-tools-generic
+  - clang
+  - llvm
+  - jq
+  - git
+  - curl
+
+write_files:
+  - path: /etc/sysctl.d/99-bpftrace.conf
+    content: |
+      kernel.unprivileged_bpf_disabled = 1
+      kernel.perf_event_paranoid = 1
+    owner: root:root
+    permissions: '0644'
+
+runcmd:
+  - sysctl --system
+  - echo "bpftrace lab environment ready. Run: bpftrace --version"
+
+final_message: "bpftrace lab is ready. Run 'bpftrace --version' to verify."

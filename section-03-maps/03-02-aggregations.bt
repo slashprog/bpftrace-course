@@ -1,0 +1,46 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Aggregations — count, sum, avg
+ * Lecture:  3.2
+ * Usage:    sudo bpftrace 03-02-aggregations.bt
+ *
+ * The workhorse aggregations. They take a value and update a
+ * running statistic in-kernel.
+ *
+ *   count()   - count of events
+ *   sum(x)    - sum of x across events
+ *   avg(x)    - average of x
+ *   min(x)    - minimum x
+ *   max(x)    - maximum x
+ *
+ * All of these can be used as the value in a map assignment:
+ *   @reads[comm] = count();
+ *   @bytes[comm] = sum(arg2);
+ */
+
+BEGIN
+{
+    printf("Aggregating vfs_read calls. Open files in another terminal:\n");
+    printf("  cat /var/log/syslog\n");
+    printf("  less /etc/passwd\n");
+}
+
+kprobe:vfs_read
+{
+    // arg2 is the requested byte count
+    @reads[comm]   = count();
+    @bytes[comm]   = sum(arg2);
+    @avg_bytes[comm] = avg(arg2);
+}
+
+END
+{
+    printf("\n=== Read count by process ===\n");
+    print(@reads);
+
+    printf("\n=== Total bytes requested by process ===\n");
+    print(@bytes);
+
+    printf("\n=== Average bytes per read by process ===\n");
+    print(@avg_bytes);
+}

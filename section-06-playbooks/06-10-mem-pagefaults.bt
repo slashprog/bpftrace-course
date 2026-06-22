@@ -1,0 +1,40 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.10: Memory — page fault breakdown
+ *
+ * The story: "Memory looks fine, but the system is slow.
+ *            Could be page faults."
+ * The script: classify page faults as major (disk) or minor (RAM),
+ *             count by process.
+ *
+ * Usage:    sudo bpftrace 06-10-mem-pagefaults.bt
+ */
+
+BEGIN
+{
+    printf("Tracing page faults. Major = disk (slow), Minor = RAM (fast).\n");
+}
+
+kprobe:handle_mm_fault
+{
+    // args->flags bit 0 = FAULT_FLAG_WRITE
+    // We can't easily distinguish major/minor in bpftrace at this level,
+    // but we can count total faults.
+    @faults[comm] = count();
+
+    // Also count "write" faults specifically (modifications)
+    $is_write = args->flags & 0x1;
+    @write_faults[comm] += $is_write ? 1 : 0;
+}
+
+END
+{
+    printf("\n=== Total page faults by process ===\n");
+    print(@faults);
+
+    printf("\n=== Write faults by process ===\n");
+    print(@write_faults);
+
+    printf("\nHigh fault counts + slow app = memory pressure.\n");
+    printf("Check 06-09-mem-oom.bt if you suspect imminent OOM.\n");
+}

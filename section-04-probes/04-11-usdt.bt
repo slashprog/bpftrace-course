@@ -1,0 +1,46 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    USDT — user statically defined tracing
+ * Lecture:  4.11
+ * Usage:    sudo bpftrace 04-11-usdt.bt
+ *
+ * USDT probes are pre-instrumented tracepoints in user-space
+ * binaries. MySQL, PostgreSQL, Node.js, Ruby, and others
+ * have them built in (or as a separate -dbg package).
+ *
+ * For this example, we'll trace Node.js HTTP requests — most
+ * modern systems have node available. For MySQL/Postgres,
+ * install the corresponding -dbg package and use the binary
+ * path.
+ *
+ * List available USDT probes in node:
+ *   sudo bpftrace -l 'usdt:/usr/bin/node:*' | head
+ *
+ * Common Node.js USDTs:
+ *   usdt:/usr/bin/node:http__server__request
+ *   usdt:/usr/bin/node:http__client__request
+ *   usdt:/usr/bin/node:net__tcp__connect
+ *
+ * Note: USDT locations vary by distro and version. Adjust
+ * the path to match your installation.
+ */
+
+BEGIN
+{
+    printf("Tracing Node.js HTTP server requests (if running).\n");
+    printf("If you have a Node app running, requests will appear below.\n");
+    printf("Start one quickly: node -e 'require(\"http\").createServer((req,res) => res.end(\"ok\")).listen(3000)'\n");
+}
+
+// This probe may not exist on every Node.js build — check with:
+//   sudo bpftrace -l 'usdt:/usr/bin/node:*' | grep http
+usdt:/usr/bin/node:http__server__request
+{
+    @requests[comm] = count();
+}
+
+END
+{
+    printf("\n=== Node HTTP requests by process ===\n");
+    print(@requests);
+}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    New TCP connections with target
+ * Domain:   network
+ * Usage:    sudo bpftrace one-liners/network/tcp-connect.bt
+ * Reaches for this when: "What is my app talking to?"
+ */
+BEGIN { printf("Tracing TCP connect events. Use network to see them.\n"); }
+kprobe:tcp_connect
+{
+    $daddr = args->sk->__sk_common->skc_daddr;
+    $dport = args->sk->__sk_common->skc_dport;
+    printf("%s (pid %d) → %s:%d\n", comm, pid, ntop(2, $daddr), ntohs($dport));
+    @[ntop(2, $daddr)] = count();
+}

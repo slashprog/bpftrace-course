@@ -1,0 +1,12 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Block I/O by process
+ * Domain:   disk
+ * Usage:    sudo bpftrace one-liners/disk/io-by-process.bt
+ * Reaches for this when: "Who is hitting the disk?"
+ */
+BEGIN { printf("Counting block I/O submissions by process.\n"); }
+tracepoint:block:block_rq_issue
+{
+    @[comm] = count();
+}

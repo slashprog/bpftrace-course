@@ -1,0 +1,65 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Multi-line script patterns — state machines
+ * Lecture:  5.8
+ * Usage:    sudo bpftrace 05-08-state-machine.bt
+ *
+ * State machines are the workhorse of complex bpftrace scripts.
+ * The verifier won't let you do arbitrary control flow, but you
+ * can implement any state machine you want using maps.
+ *
+ * This example tracks the lifecycle of an open file:
+ *   1. openat()  — record the filename
+ *   2. read()    — count how many times it's read
+ *   3. close()   — record the duration and clear state
+ *
+ * For real systems you'd use a unique ID (inode, fd, etc.) as
+ * the map key. This example uses the file descriptor.
+ */
+
+BEGIN
+{
+    printf("Tracking file lifecycle: open → read → close.\n");
+    printf("Open some files and read from them to see the state machine in action.\n");
+}
+
+tracepoint:syscalls:sys_enter_openat
+{
+    // STATE: record that this fd is now open
+    @filename[args->fd] = str(args->filename);
+    @open_time[args->fd] = nsecs;
+}
+
+tracepoint:syscalls:sys_enter_read
+{
+    // STATE: count reads per fd
+    $fd = args->fd;
+    if (@filename[$fd] != "") {
+        @reads[$fd] = count();
+    }
+}
+
+tracepoint:syscalls:sys_enter_close
+{
+    // STATE: clear and report
+    $fd = args->fd;
+    $name = @filename[$fd];
+
+    if ($name != "" && @open_time[$fd] > 0) {
+        $lifetime_ms = (nsecs - @open_time[$fd]) / 1000000;
+        printf("Closed: %s (fd=%d) — open for %d ms, %d reads\n",
+            $name, $fd, $lifetime_ms, @reads[$fd]);
+    }
+
+    // Clean up state for this fd
+    delete(@filename[$fd]);
+    delete(@open_time[$fd]);
+    delete(@reads[$fd]);
+}
+
+END
+{
+    printf("\n=== Final map contents (should be empty) ===\n");
+    print(@filename);
+    print(@reads);
+}

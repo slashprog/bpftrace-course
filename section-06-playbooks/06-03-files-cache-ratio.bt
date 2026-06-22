@@ -1,0 +1,46 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.3: Filesystem — page cache hit ratio
+ *
+ * The story: "Should I add RAM to this box?"
+ * The script: count page cache hits vs misses.
+ *             High miss ratio → cache pressure → add RAM.
+ *
+ * Usage:    sudo bpftrace 06-03-files-cache-ratio.bt
+ */
+
+BEGIN
+{
+    printf("Counting page cache hits vs misses.\n");
+    printf("Run your workload for 30s, then Ctrl-C.\n");
+}
+
+// Page cache hit (data found in memory)
+kprobe:filemap_get_pages
+{
+    @cache_hits = count();
+}
+
+// Page cache miss (had to read from disk)
+kprobe:filemap_add_to_page_cache
+{
+    @cache_misses = count();
+}
+
+END
+{
+    printf("\n=== Page cache statistics ===\n");
+    printf("Hits:    %d\n", @cache_hits);
+    printf("Misses:  %d\n", @cache_misses);
+    printf("Total:   %d\n", @cache_hits + @cache_misses);
+
+    if (@cache_hits + @cache_misses > 0) {
+        $ratio = @cache_hits * 100 / (@cache_hits + @cache_misses);
+        printf("Hit ratio: %d%%\n", $ratio);
+    }
+
+    printf("\nInterpretation:\n");
+    printf("  > 95%%  Excellent — RAM is sufficient\n");
+    printf("  80-95%% OK — consider monitoring\n");
+    printf("  < 80%% Cache pressure — adding RAM will help\n");
+}

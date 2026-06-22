@@ -1,0 +1,50 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.8: Process — short-lived processes
+ *
+ * The story: "Something is spawning lots of short-lived processes.
+ *            Is it a config issue? A bug?"
+ * The script: track each process's lifetime and report on
+ *             processes that lived for less than 100ms.
+ *
+ * Usage:    sudo bpftrace 06-08-proc-short-lived.bt
+ */
+
+BEGIN
+{
+    printf("Detecting short-lived processes. Watch for very fast exec/exit pairs.\n");
+    printf("Threshold: processes living < 100ms\n");
+}
+
+tracepoint:sched:sched_process_exec
+{
+    // New process started — record start time
+    @start_time[pid] = nsecs;
+    @exec_comm[pid] = comm;
+}
+
+tracepoint:sched:sched_process_exit
+{
+    $lifetime_ms = (nsecs - @start_time[pid]) / 1000000;
+    $name = @exec_comm[pid];
+
+    if ($lifetime_ms < 100 && $name != "") {
+        // Short-lived — log it
+        @short_lived[$name] = count();
+    }
+
+    delete(@start_time[pid]);
+    delete(@exec_comm[pid]);
+}
+
+END
+{
+    printf("\n=== Short-lived processes (< 100ms) ===\n");
+    print(@short_lived, 20);
+
+    printf("\nCommon causes:\n");
+    printf("  - Shell scripts doing grep/awk/sed chains (often fine)\n");
+    printf("  - Cron jobs that fail immediately (config bug)\n");
+    printf("  - Misconfigured health checks restarting constantly\n");
+    printf("  - Test scripts or build tools running repeatedly\n");
+}

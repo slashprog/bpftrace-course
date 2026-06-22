@@ -1,0 +1,47 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.15: Disk — per-I/O latency
+ *
+ * The story: "Disk I/O is slow. How slow exactly?"
+ * The script: trace every block I/O request, measure completion
+ *             time, build a latency histogram.
+ *
+ * Usage:    sudo bpftrace 06-15-disk-latency.bt
+ */
+
+BEGIN
+{
+    printf("Tracing block I/O latency. Generate disk I/O to populate.\n");
+    printf("  dd if=/dev/zero of=/tmp/bigfile bs=1M count=1000\n");
+}
+
+// I/O request issued
+tracepoint:block:block_rq_issue
+{
+    @io_start[args->bytes] = nsecs;
+    @io_size[args->bytes] = hist(args->sector);
+}
+
+// I/O request completed
+tracepoint:block:block_rq_complete
+/@io_start[args->bytes]/
+{
+    $us = (nsecs - @io_start[args->bytes]) / 1000;
+    @io_latency = hist($us);
+    @io_count = count();
+    delete(@io_start[args->bytes]);
+}
+
+END
+{
+    printf("\n=== Block I/O latency (μs) ===\n");
+    print(@io_latency);
+
+    printf("\n=== I/O request count ===\n");
+    print(@io_count);
+
+    printf("\nReading the output:\n");
+    printf("  - P99 < 1ms: fast SSD or cache\n");
+    printf("  - P99 > 10ms: slow disk or contention\n");
+    printf("  - Bimodal (some fast, some very slow): cache misses\n");
+}

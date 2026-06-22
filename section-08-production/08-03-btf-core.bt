@@ -1,0 +1,51 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    BTF and CO-RE — cross-kernel portability
+ * Lecture:  8.3
+ * Usage:    sudo bpftrace 08-03-btf-core.bt
+ *
+ * BTF (BPF Type Format) is the magic that makes bpftrace scripts
+ * portable across kernel versions. With BTF, bpftrace knows the
+ * layout of every kernel struct and can offset into them safely.
+ *
+ * Without BTF, you'd need to recompile your script for every kernel
+ * version because struct offsets change. With BTF (kernel 5.4+),
+ * the script just works.
+ *
+ * Check if your kernel has BTF:
+ *   ls /sys/kernel/btf/vmlinux
+ *
+ * View a struct's layout:
+ *   sudo bpftrace -lv 'kprobe:tcp_connect'
+ *   // args->sk is "struct sock *"
+ *
+ * View a struct's fields (via /sys/kernel/btf):
+ *   bpftool btf dump file /sys/kernel/btf/vmlinux | grep 'struct sock' -A 30
+ */
+
+BEGIN
+{
+    if (access("/sys/kernel/btf/vmlinux", 0) == 0) {
+        printf("✓ BTF available — your scripts will be portable\n");
+    } else {
+        printf("✗ BTF NOT available — your scripts may break across kernel versions\n");
+        printf("  Recommendation: upgrade to a kernel with CONFIG_DEBUG_INFO_BTF=y\n");
+    }
+}
+
+kprobe:tcp_connect
+{
+    // Without BTF, this would be:
+    //   @daddr[ntohs(args->sk->__sk_common.skc_daddr)] = count();
+    //
+    // With BTF, bpftrace knows the exact offsets and validates them.
+    // Same code works on kernel 5.4, 5.10, 6.1, 6.6 — no recompilation.
+    $daddr = args->sk->__sk_common->skc_daddr;
+    @conns_by_dest[ntop(2, $daddr)] = count();
+}
+
+END
+{
+    printf("\n=== Connections (resolved via BTF) ===\n");
+    print(@conns_by_dest);
+}

@@ -1,0 +1,32 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    JSON output
+ * Lecture:  7.1
+ * Usage:    sudo bpftrace 07-01-json.bt
+ *
+ * bpftrace can output in JSON format (via -B or built-in JSON).
+ * Pipe to jq, or to any tool that consumes JSON.
+ *
+ * Note: the `-B` flag selects the output buffer mode:
+ *   - line   (default) — line-buffered, human readable
+ *   - full   — full buffer output
+ *   - none   — no buffering, raw data
+ *
+ * For JSON-style structured output, the trick is to use printf
+ * with JSON-style format strings. bpftrace 0.20+ also has
+ * experimental built-in JSON output.
+ *
+ * This script outputs comma-separated values that jq can parse.
+ */
+
+BEGIN
+{
+    printf("Streaming CSV (process,reads) — pipe to jq or your dashboard.\n");
+}
+
+kprobe:vfs_read
+{
+    // CSV format: process,reads
+    // Pipe this output to:  awk -F, '{print $1}' | sort | uniq -c | sort -rn
+    printf("%s,%d\n", comm, 1);
+}

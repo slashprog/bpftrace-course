@@ -1,0 +1,32 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Hello, bpftrace — your first trace
+ * Lecture:  1.9
+ * Tested:   Ubuntu 24.04, kernel 6.x, bpftrace 0.20
+ * Usage:    sudo bpftrace 01-09-hello-world.bt
+ * Notes:    Press Ctrl-C to stop and see results.
+ *
+ * The simplest possible bpftrace script: counts every vfs_read
+ * call, grouped by process name. Run it for a few seconds in
+ * a terminal while you do normal things (browse a website, edit
+ * a file) and watch the counts climb.
+ */
+
+BEGIN
+{
+    printf("Tracing vfs_read... Hit Ctrl-C to see results.\n");
+    printf("Try opening some files in another terminal:\n");
+    printf("  cat /etc/hostname\n");
+    printf("  less /var/log/syslog\n");
+    printf("  ls -la /etc\n");
+}
+
+kprobe:vfs_read
+{
+    @reads[comm] = count();
+}
+
+END
+{
+    printf("\n=== Final tally (reads by process) ===\n");
+}

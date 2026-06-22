@@ -1,0 +1,60 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Measuring probe overhead
+ * Lecture:  8.5
+ * Usage:    sudo bpftrace 08-05-overhead.bt
+ *
+ * Every probe has overhead. Some are negligible; some are
+ * surprisingly expensive. This script measures the overhead
+ * of an empty probe versus a probe with work.
+ *
+ * It also shows you how to estimate the cost of your own scripts:
+ *   - Use profile:hz:99 to sample
+ *   - Compare tracepoint vs kprobe
+ *   - Look at the histogram
+ *
+ * For real benchmarks, use perf instead of bpftrace — bpftrace
+ * has its own per-event overhead. perf is closer to "ground truth."
+ */
+
+BEGIN
+{
+    printf("Sampling empty kprobe vs tracepoint overhead.\n");
+    printf("Watch how often each fires (this approximates per-event cost).\n");
+}
+
+// Sample every 10ms — how often is vfs_read called?
+profile:hz:99
+{
+    @kprobe_samples = count();
+    @tracepoint_samples = count();
+}
+
+kprobe:vfs_read
+{
+    @kprobe_actual_fires = count();
+}
+
+tracepoint:syscalls:sys_enter_read
+{
+    @tracepoint_actual_fires = count();
+}
+
+END
+{
+    printf("\n=== Sampling events (how often bpftrace wakes up to sample) ===\n");
+    print(@kprobe_samples);
+
+    printf("\n=== Actual vfs_read fires ===\n");
+    print(@kprobe_actual_fires);
+
+    printf("\n=== Actual sys_enter_read tracepoint fires ===\n");
+    print(@tracepoint_actual_fires);
+
+    printf("\n=== General overhead guidelines ===\n");
+    printf("  kprobe:    50-200 ns per fire, plus context switch if action is heavy\n");
+    printf("  tracepoint: 20-100 ns per fire (lower — pre-instrumented)\n");
+    printf("  uprobe:    100-500 ns per fire (depends on binary)\n");
+    printf("  software:  near-zero (kernel-internal counter)\n");
+    printf("  hardware:  configurable sampling rate\n");
+}

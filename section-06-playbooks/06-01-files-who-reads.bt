@@ -1,0 +1,29 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.1: Filesystem — who is opening this file?
+ *
+ * The story: "Someone is touching /etc/passwd. Who?"
+ * The script: trace every openat() call, group by filename,
+ *             and show the top readers.
+ *
+ * Usage:    sudo bpftrace 06-01-files-who-reads.bt
+ *           (optionally pass a filename pattern: sudo bpftrace 06-01-files-who-reads.bt | grep /etc/passwd)
+ */
+
+BEGIN
+{
+    printf("Tracing all file opens. Press Ctrl-C to see who opened what.\n");
+    printf("Tip: pipe to grep to filter:  sudo bpftrace ... | grep -i /etc/passwd\n");
+}
+
+tracepoint:syscalls:sys_enter_openat
+{
+    // Group by [process, filename]
+    @opens[comm, str(args->filename)] = count();
+}
+
+END
+{
+    printf("\n=== Top 20 most-opened files (by process) ===\n");
+    print(@opens, 20);
+}

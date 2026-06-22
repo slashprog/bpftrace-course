@@ -1,0 +1,19 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Function latency by process
+ * Domain:   latency
+ * Usage:    sudo FUNC=vfs_read bpftrace one-liners/latency/latency-by-process.bt
+ * Reaches for this when: "Which process is slowest at this operation?"
+ */
+BEGIN { printf("Per-process latency for $FUNC. Use FUNC env var to change target.\n"); }
+kprobe:$FUNC ?: vfs_read
+{
+    @s[tid] = nsecs;
+}
+kretprobe:$FUNC ?: vfs_read
+/@s[tid]/
+{
+    $us = (nsecs - @s[tid]) / 1000;
+    @[comm] = hist($us);
+    delete(@s[tid]);
+}

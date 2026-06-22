@@ -1,0 +1,18 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    setuid/setgid events (potential privilege changes)
+ * Domain:   security
+ * Usage:    sudo bpftrace one-liners/security/setuid-events.bt
+ * Reaches for this when: "Is anything changing privileges?"
+ */
+BEGIN { printf("Watching for setuid/setgid calls. Will print each event.\n"); }
+tracepoint:syscalls:sys_enter_setuid
+{
+    printf("[SETUID] %s (pid %d) → uid %d\n", comm, pid, args->uid);
+    @[comm] = count();
+}
+tracepoint:syscalls:sys_enter_setgid
+{
+    printf("[SETGID] %s (pid %d) → gid %d\n", comm, pid, args->gid);
+    @[comm] = count();
+}

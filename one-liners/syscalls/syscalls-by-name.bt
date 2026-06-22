@@ -1,0 +1,14 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Syscall distribution by name (per process)
+ * Domain:   syscalls
+ * Usage:    sudo bpftrace one-liners/syscalls/syscalls-by-name.bt
+ * Reaches for this when: "What kinds of syscalls is this process making?"
+ * Note:     args->id is the syscall number. Map it via:
+ *           ausyscall $(pidof process) | sort
+ */
+BEGIN { printf("Syscall-by-name. Map ID to name with: ausyscall <id>\n"); }
+tracepoint:raw_syscalls:sys_enter
+{
+    @[comm, args->id] = count();
+}

@@ -1,0 +1,44 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Stack traces — kstack and ustack
+ * Lecture:  3.7
+ * Usage:    sudo bpftrace 03-07-kstack.bt
+ *
+ * kstack captures the kernel call stack when a kprobe fires.
+ * ustack captures the user-space call stack when a uprobe fires.
+ *
+ *   kstack - returns a string like:
+ *            "do_sys_open+1
+ *             do_sys_openat2+547
+ *             __x64_sys_openat+50
+ *             do_syscall_64+59
+ *             entry_SYSCALL_64+121"
+ *
+ *   ustack - similar, but for user-space frames
+ *
+ * Common pattern: aggregate events by stack trace
+ *   @[kstack] = count();
+ *
+ * This is the foundation of flame-graph generation (Section 7).
+ */
+
+BEGIN
+{
+    printf("Counting vfs_read calls grouped by kernel call stack.\n");
+    printf("Each unique stack becomes a 'flame' in a flame graph.\n");
+}
+
+kprobe:vfs_read
+{
+    // The key here is the kernel stack — same code path = same stack
+    @reads[kstack] = count();
+}
+
+END
+{
+    printf("\n=== Reads by kernel call stack (top 20) ===\n");
+    print(@reads, 20);
+
+    printf("\nTip: pipe to Brendan Gregg's FlameGraph tools to visualize:\n");
+    printf("  sudo bpftrace 03-07-kstack.bt | ./flamegraph.pl > reads.svg\n");
+}

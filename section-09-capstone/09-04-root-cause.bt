@@ -1,0 +1,68 @@
+#!/usr/bin/env bpftrace
+/*
+ * Capstone Phase 3: Root cause
+ *
+ * The story: "I've identified a suspect file read. Now I need to
+ *            confirm it's the bottleneck."
+ * The approach: trace reads of that specific file, measure its
+ *               impact on overall request latency.
+ *
+ * Usage:    sudo bpftrace 09-04-root-cause.bt
+ *
+ * Note: in the simulated slow-api.sh, the offending read is
+ *       `cat /var/log/syslog`. Update the SUSPECT_FILE pattern
+ *       below to match what you found in phase 2.
+ */
+
+#ifndef SUSPECT_FILE
+#define SUSPECT_FILE "/var/log/syslog"
+#endif
+
+BEGIN
+{
+    printf("ROOT CAUSE PHASE 3: Isolating the impact of %s\n", SUSPECT_FILE);
+    printf("Watching only reads of that file. Comparing to overall latency.\n");
+}
+
+tracepoint:syscalls:sys_enter_openat
+/comm == "slow-api.sh" || str(args->filename) == SUSPECT_FILE/
+{
+    $matches_suspect = str(args->filename) == SUSPECT_FILE;
+    @suspect_opens = count() * (1 ? 1 : 0);  // always count
+    if ($matches_suspect) {
+        @actual_suspect_opens = count();
+        printf("[SUSPECT] Opened %s at %lld ns\n", str(args->filename), nsecs);
+    }
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $us = (nsecs - @start[tid]) / 1000;
+    @read_latency = hist($us);
+    delete(@start[tid]);
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+END
+{
+    printf("\n=== Reads of the suspect file ===\n");
+    print(@actual_suspect_opens);
+
+    printf("\n=== Overall vfs_read latency ===\n");
+    print(@read_latency);
+
+    printf("\nRoot cause analysis:\n");
+    printf("  - If the suspect file is being read on every request,\n");
+    printf("    and its read latency is high (cache cold),\n");
+    printf("    then this is the bottleneck.\n");
+    printf("\n");
+    printf("  The fix: don't read the file on every request.\n");
+    printf("  - Cache the result\n");
+    printf("  - Read it once at startup\n");
+    printf("  - Use inotify to watch for changes\n");
+}

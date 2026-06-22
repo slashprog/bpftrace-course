@@ -1,0 +1,39 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.9: Memory — OOM events
+ *
+ * The story: "The OOM killer is firing. Who's getting killed and why?"
+ * The script: trace OOM kills with full context.
+ *
+ * Usage:    sudo bpftrace 06-09-mem-oom.bt
+ */
+
+BEGIN
+{
+    printf("Watching for OOM events. Will print details when they happen.\n");
+    printf("To trigger a test OOM, run: stress-ng --vm 1 --vm-bytes 90% --timeout 60\n");
+}
+
+kprobe:oom_kill_process
+{
+    printf("\n========== OOM KILL DETECTED ==========\n");
+    printf("Killed process:  %s (pid %d)\n", comm, pid);
+    printf("Kernel stack:\n%s\n", kstack);
+    printf("======================================\n");
+
+    @oom_kills[comm] = count();
+    @oom_stack[kstack] = count();
+}
+
+END
+{
+    if (@oom_kills > 0) {
+        printf("\n=== Summary: OOM kills by process ===\n");
+        print(@oom_kills);
+
+        printf("\n=== Kernel stacks that triggered OOM ===\n");
+        print(@oom_stack, 5);
+    } else {
+        printf("\nNo OOM kills detected. Phew!\n");
+    }
+}

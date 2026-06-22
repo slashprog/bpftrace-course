@@ -1,0 +1,42 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.11: Memory — swap usage by process
+ *
+ * The story: "We're swapping. Which process is responsible?"
+ * The script: trace swap-in events and count per process.
+ *
+ * Usage:    sudo bpftrace 06-11-mem-swap.bt
+ */
+
+BEGIN
+{
+    printf("Tracing swap activity. Run a memory-hungry workload to see this populate.\n");
+    printf("Tip: stress-ng --vm 1 --vm-bytes 70% --timeout 60\n");
+}
+
+kprobe:swap_readpage
+{
+    @swapins[comm] = count();
+    @swapin_stack[kstack] = count();
+}
+
+kprobe:swap_writepage
+{
+    @swapouts[comm] = count();
+}
+
+END
+{
+    printf("\n=== Swap-ins by process ===\n");
+    print(@swapins);
+
+    printf("\n=== Swap-outs by process ===\n");
+    print(@swapouts);
+
+    if (@swapins > 1000) {
+        printf("\n!!! Heavy swap activity !!!\n");
+        printf("Consider: add RAM, reduce workload, tune swappiness\n");
+        printf("Top swap-in stacks:\n");
+        print(@swapin_stack, 5);
+    }
+}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    OOM killer events
+ * Domain:   memory
+ * Usage:    sudo bpftrace one-liners/memory/oom-events.bt
+ * Reaches for this when: "We just OOMed. What got killed?"
+ */
+BEGIN { printf("Watching for OOM events. Will print details when one occurs.\n"); }
+kprobe:oom_kill_process
+{
+    printf("\n!!! OOM KILL !!!\n");
+    printf("Killed: %s (pid %d)\n", comm, pid);
+    printf("Stack:\n%s\n", kstack);
+    @[comm] = count();
+}

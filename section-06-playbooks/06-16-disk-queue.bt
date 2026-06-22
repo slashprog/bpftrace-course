@@ -1,0 +1,42 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.16: Disk — queue depth and merge stats
+ *
+ * The story: "Is the I/O queue full?"
+ * The script: count in-flight I/O requests, track merges.
+ *
+ * Usage:    sudo bpftrace 06-16-disk-queue.bt
+ */
+
+BEGIN
+{
+    printf("Counting I/O queue depth. Sample the in-flight count over time.\n");
+}
+
+tracepoint:block:block_rq_issue
+{
+    @inflight = count();
+}
+
+tracepoint:block:block_rq_complete
+{
+    @inflight = count();
+}
+
+tracepoint:block:block_rq_merge
+{
+    @merges[comm] = count();
+}
+
+END
+{
+    printf("\n=== I/O merges (requests combined before issue) by process ===\n");
+    print(@merges);
+
+    printf("\n=== Total I/O request events (issue + complete) ===\n");
+    print(@inflight);
+
+    printf("\nReading the output:\n");
+    printf("  - High merge count = kernel is efficiently combining adjacent I/O\n");
+    printf("  - Run this with sampling (interval:s:1) to see queue depth over time\n");
+}

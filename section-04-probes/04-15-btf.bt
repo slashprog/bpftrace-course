@@ -1,0 +1,57 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    BTF-powered probes
+ * Lecture:  4.15
+ * Usage:    sudo bpftrace 04-15-btf.bt
+ *
+ * BTF (BPF Type Format) lets bpftrace know the layout of
+ * kernel structs, so you can access struct fields with
+ * type safety. No more "what is arg0" guesswork.
+ *
+ * Requirements:
+ *   - Kernel 5.4+ with CONFIG_DEBUG_INFO_BTF=y (Ubuntu 20.04+ has this)
+ *   - bpftrace 0.14+
+ *
+ * View a function's typed signature:
+ *   sudo bpftrace -lv 'kprobe:tcp_connect'
+ *
+ *   // Output:
+ *   //   struct sock * sk
+ *   //   struct sockaddr * uaddr
+ *   //   int addr_len
+ *
+ *   ...which means you can write:
+ *   //   args->sk->__sk_common->skc_daddr
+ *
+ * Without BTF, you'd have to know the struct layout by hand
+ * (or read kernel source). BTF is a massive quality-of-life
+ * improvement.
+ */
+
+BEGIN
+{
+    printf("Tracing tcp_connect() with BTF — we get typed access to struct sock fields.\n");
+    printf("Trigger a connection: curl http://example.com in another terminal.\n");
+}
+
+kprobe:tcp_connect
+{
+    // With BTF, args->sk is a real struct sock pointer
+    // and we can dereference fields directly.
+
+    // The remote address (network byte order)
+    $daddr = args->sk->__sk_common->skc_daddr;
+    $dport = args->sk->__sk_common->skc_dport;
+
+    // ntop() converts the 4-byte network-format address to "1.2.3.4"
+    // ntohs() converts the port from network byte order
+    printf("%s (%d) → %s:%d\n", comm, pid, ntop(2, $daddr), ntohs($dport));
+
+    @conns[ntop(2, $daddr)] = count();
+}
+
+END
+{
+    printf("\n=== Top remote IPs ===\n");
+    print(@conns);
+}

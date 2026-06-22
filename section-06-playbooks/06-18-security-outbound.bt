@@ -1,0 +1,62 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.18: Security — outbound network anomalies
+ *
+ * The story: "Is anything exfiltrating data? Talking to suspicious IPs?"
+ * The script: trace all outbound TCP connections and DNS queries,
+ *             build a per-process report.
+ *
+ * Usage:    sudo bpftrace 06-18-security-outbound.bt
+ *
+ * Tip: when you see unexpected IPs, check them against threat
+ *      intel feeds like AbuseIPDB, GreyNoise, or VirusTotal.
+ */
+
+BEGIN
+{
+    printf("Watching outbound network activity. New TCP connections and DNS queries will print.\n");
+}
+
+kprobe:tcp_connect
+{
+    $daddr = args->sk->__sk_common->skc_daddr;
+    $dport = args->sk->__sk_common->skc_dport;
+    $dest = ntop(2, $daddr);
+
+    // Skip connections to localhost
+    if ($daddr == 0 || $daddr == 16777343) {  // 127.0.0.0 and 127.0.0.1
+        return;
+    }
+
+    printf("[CONN] %s (pid %d) → %s:%d\n",
+        comm, pid, $dest, ntohs($dport));
+
+    @conns_by_proc[comm] = count();
+    @conns_by_dest[$dest] = count();
+}
+
+// DNS queries (libc sendto, with heuristics for port 53)
+uprobe:/lib/x86_64-linux-gnu/libc.so.6:sendto
+{
+    // arg4 is the destination address (sockaddr*)
+    // We can't easily decode the port here without BTF, so we
+    // count all sendtos and filter post-hoc.
+    @sendtos[comm] = count();
+}
+
+END
+{
+    printf("\n=== Outbound connections by process ===\n");
+    print(@conns_by_proc);
+
+    printf("\n=== Top destination IPs ===\n");
+    print(@conns_by_dest);
+
+    printf("\n=== sendto() calls (DNS heuristic) by process ===\n");
+    print(@sendtos);
+
+    printf("\nRed flags to look for:\n");
+    printf("  - Processes connecting to IPs you don't recognize\n");
+    printf("  - Spikes in conns_by_proc from a process that's normally quiet\n");
+    printf("  - High sendto counts without matching conns (UDP exfiltration?)\n");
+}

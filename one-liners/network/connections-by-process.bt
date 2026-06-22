@@ -1,0 +1,12 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Total connections per process
+ * Domain:   network
+ * Usage:    sudo bpftrace one-liners/network/connections-by-process.bt
+ * Reaches for this when: "Who has the most open connections?"
+ */
+BEGIN { printf("Counting TCP connect events per process.\n"); }
+kprobe:tcp_connect
+{
+    @[comm] = count();
+}

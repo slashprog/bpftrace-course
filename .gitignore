@@ -1,0 +1,37 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# bpftrace output (uncomment if you want to track output samples)
+*.txt
+*.out
+*.log
+*.dat
+
+# Vagrant / Packer
+.vagrant/
+packer_cache/
+
+# Cloud-init artifacts
+*.iso
+
+# Python (used in some labs)
+__pycache__/
+*.pyc
+.venv/
+
+# Sensitive
+*.env
+.envrc

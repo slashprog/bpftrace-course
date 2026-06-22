@@ -1,0 +1,48 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.6: Network — DNS resolution timing
+ *
+ * The story: "Our app's first request is slow. Is it DNS?"
+ * The script: trace sendto() (used by glibc resolver) and
+ *             measure the round-trip to the resolver.
+ *
+ * Usage:    sudo bpftrace 06-06-net-dns-timing.bt
+ *
+ * Note: the path to libc varies by distro. On Debian/Ubuntu
+ *       it's /lib/x86_64-linux-gnu/libc.so.6
+ *       On RHEL/Fedora: /lib64/libc.so.6
+ */
+
+BEGIN
+{
+    printf("Tracing DNS resolution latency. nslookup/wget/curl in another terminal.\n");
+    printf("  nslookup example.com\n");
+}
+
+// sendto() — what glibc uses for DNS queries
+uprobe:/lib/x86_64-linux-gnu/libc.so.6:sendto
+{
+    // Only care about port 53 (DNS)
+    $port = arg4;
+    if ($port == 53 || $port == 13568 || $port == 5353) {  // standard DNS, mDNS
+        @dns_start[tid] = nsecs;
+        @dns_target[pid] = ntop(2, arg4);
+    }
+}
+
+uretprobe:/lib/x86_64-linux-gnu/libc.so.6:sendto
+/@dns_start[tid]/
+{
+    $us = (nsecs - @dns_start[tid]) / 1000;
+    @dns_latency = hist($us);
+    @dns_count = count();
+    delete(@dns_start[tid]);
+}
+
+END
+{
+    printf("\n=== DNS resolution latency (μs) ===\n");
+    print(@dns_latency);
+    printf("\n=== DNS query count ===\n");
+    print(@dns_count);
+}

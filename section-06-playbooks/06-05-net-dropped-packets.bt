@@ -1,0 +1,47 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.5: Network — packet drops
+ *
+ * The story: "We're losing packets. Where?"
+ * The script: count packet drops at various kernel layers.
+ *
+ * Usage:    sudo bpftrace 06-05-net-dropped-packets.bt
+ */
+
+BEGIN
+{
+    printf("Counting packet drops. Generate some load: ping -f target, or stress the network.\n");
+}
+
+// Drop at the qdisc layer
+kprobe:__dev_queue_xmit
+{
+    @xmit_attempts[comm] = count();
+}
+
+// TCP retransmits (a form of network-level drop)
+tracepoint:tcp:tcp_retransmit_skb
+{
+    @tcp_retransmits[comm] = count();
+}
+
+// Socket-level drops
+kprobe:skb_drop_reason
+{
+    @socket_drops = count();
+}
+
+END
+{
+    printf("\n=== Transmit attempts by process ===\n");
+    print(@xmit_attempts);
+
+    printf("\n=== TCP retransmits by process ===\n");
+    print(@tcp_retransmits);
+
+    printf("\n=== Socket-level drops ===\n");
+    print(@socket_drops);
+
+    printf("\nHigh retransmits + low xmit failures = network issue\n");
+    printf("High xmit failures + low retransmits = local queue issue\n");
+}

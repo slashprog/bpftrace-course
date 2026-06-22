@@ -1,0 +1,49 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Your first 10 one-liners
+ * Lecture:  2.5
+ * Usage:    Run each one-liner from this file one at a time.
+ *           Copy/paste into a terminal with sudo bpftrace -e '...'
+ *
+ * Each one teaches a specific concept. Try them in order.
+ */
+
+# === 1. Syscall count by process ===
+# Concept: kprobe + count() + comm
+sudo bpftrace -e 'kprobe:do_sys_open { @[comm] = count(); }'
+
+# === 2. vfs_read latency histogram ===
+# Concept: kprobe + kretprobe + per-tid state + hist()
+sudo bpftrace -e 'kprobe:vfs_read { @s[tid] = nsecs; } kretprobe:vfs_read /@s[tid]/ { @us = hist((nsecs - @s[tid]) / 1000); delete(@s[tid]); }'
+
+# === 3. New process execs (live) ===
+# Concept: tracepoint + printf + str()
+sudo bpftrace -e 'tracepoint:sched:sched_process_exec { printf("%s → %s\n", comm, str(args->filename)); }'
+
+# === 4. Top processes by syscall rate (5s) ===
+# Concept: tracepoint:raw_syscalls + count
+sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
+
+# === 5. OOM killer events ===
+# Concept: kernel event + printf + kstack
+sudo bpftrace -e 'kprobe:oom_kill_process { printf("OOM: %s (pid %d) — %s\n", comm, pid, kstack); }'
+
+# === 6. TCP connections to specific IPs ===
+# Concept: kprobe + ntop() for IP conversion
+sudo bpftrace -e 'kprobe:tcp_connect { printf("%s → %s:%d\n", comm, ntop(2, args->sk__sk_common__skc_daddr), args->sk__sk_common__skc_dport); }'
+
+# === 7. File open by name ===
+# Concept: tracepoint + str() for filename
+sudo bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf("%s opened: %s\n", comm, str(args->filename)); }'
+
+# === 8. Page faults by process ===
+# Concept: kprobe + count
+sudo bpftrace -e 'kprobe:handle_page_fault { @[comm] = count(); }'
+
+# === 9. Read bytes histogram ===
+# Concept: kretprobe + retval + hist()
+sudo bpftrace -e 'kretprobe:vfs_read /retval > 0/ { @bytes = hist(retval); }'
+
+# === 10. Context switch rate per CPU ===
+# Concept: kprobe + count
+sudo bpftrace -e 'kprobe:finish_task_switch { @ctx[cpu] = count(); }'

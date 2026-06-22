@@ -1,0 +1,39 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    REPL vs scripts
+ * Lecture:  1.10
+ * Usage:    sudo bpftrace 01-10-repl-vs-scripts.bt
+ *
+ * The same logic expressed in three ways:
+ *
+ *   1. Inline one-liner (REPL-style):
+ *      sudo bpftrace -e 'kprobe:vfs_read { @[comm] = count(); }'
+ *
+ *   2. This file (script form, more readable, easier to grow)
+ *
+ *   3. The REPL itself (interactive, good for exploring):
+ *      sudo bpftrace
+ *      > kprobe:vfs_read { @[comm] = count(); }
+ *      > <Ctrl-C to see results>
+ *
+ * Use the REPL when you're exploring. Use scripts when you know
+ * what you want to capture and need to keep it.
+ */
+
+BEGIN
+{
+    printf("=== REPL vs scripts demo ===\n");
+    printf("This is the script form of: kprobe:vfs_read { @[comm] = count(); }\n");
+    printf("It does the same thing as the inline one-liner — just more verbose.\n");
+    printf("\nRun the same logic as a one-liner:\n");
+    printf("  sudo bpftrace -e 'kprobe:vfs_read { @[comm] = count(); }'\n");
+    printf("\nOr interactively in the REPL:\n");
+    printf("  sudo bpftrace\n");
+    printf("  > kprobe:vfs_read { @[comm] = count(); }\n");
+    printf("  > <Ctrl-C>\n");
+}
+
+kprobe:vfs_read
+{
+    @reads[comm] = count();
+}

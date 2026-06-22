@@ -1,0 +1,35 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.7: Process — fork rate and source
+ *
+ * The story: "CPU is busy. Is something forking like crazy?"
+ * The script: count forks per parent, and print top offenders.
+ *
+ * Usage:    sudo bpftrace 06-07-proc-forks.bt
+ */
+
+BEGIN
+{
+    printf("Tracing process forks. Watch for fork bombs or chatty services.\n");
+}
+
+tracepoint:sched:sched_process_fork
+{
+    // args->parent_pid, args->parent_comm, args->child_pid, args->child_comm
+    @forks_per_parent[args->parent_comm] = count();
+    @forks_per_pid[pid] = count();
+}
+
+END
+{
+    printf("\n=== Forks per parent process ===\n");
+    print(@forks_per_parent);
+
+    printf("\n=== Top forkers (by PID) ===\n");
+    print(@forks_per_pid, 10);
+
+    printf("\nLook for:\n");
+    printf("  - System processes with high counts (normal)\n");
+    printf("  - User processes with abnormally high counts (suspicious)\n");
+    printf("  - Short-lived child processes (see 06-08)\n");
+}

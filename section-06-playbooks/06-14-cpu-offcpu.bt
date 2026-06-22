@@ -1,0 +1,57 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.14: CPU — off-CPU analysis
+ *
+ * The story: "My thread is sleeping. Why? And for how long?"
+ * The script: when a thread switches out, record what it was
+ *             blocked on (the wakeup source) and how long.
+ *
+ * Usage:    sudo bpftrace 06-14-cpu-offcpu.bt
+ *
+ * Note: off-CPU analysis is trickier than on-CPU. The script
+ *       below tracks voluntary sleeps and reports the cause.
+ */
+
+BEGIN
+{
+    printf("Tracing off-CPU (sleep) durations and reasons.\n");
+}
+
+kprobe:finish_task_switch
+{
+    // A task just switched out (became off-CPU)
+    $prev_pid = args->prev_pid;
+
+    if ($prev_pid > 0) {
+        @offcpu_time[$prev_pid] = nsecs;
+        @offcpu_comm[$prev_pid] = args->prev_comm;
+    }
+}
+
+kprobe:try_to_wake_up
+{
+    // A task just got woken up (became on-CPU soon)
+    $pid = args->p;
+
+    if (@offcpu_time[$pid] > 0) {
+        $sleep_us = (nsecs - @offcpu_time[$pid]) / 1000;
+        @offcpu_duration[@offcpu_comm[$pid]] = hist($sleep_us);
+        @offcpu_count[@offcpu_comm[$pid]] = count();
+        delete(@offcpu_time[$pid]);
+        delete(@offcpu_comm[$pid]);
+    }
+}
+
+END
+{
+    printf("\n=== Off-CPU duration by process (μs) ===\n");
+    print(@offcpu_duration);
+
+    printf("\n=== Off-CPU event count by process ===\n");
+    print(@offcpu_count);
+
+    printf("\nReading the output:\n");
+    printf("  - Long durations + high counts = process is waiting on I/O, locks, etc.\n");
+    printf("  - Long durations + low counts = single event, likely not a problem\n");
+    printf("  - High counts of short sleeps = process is doing lots of small I/O\n");
+}

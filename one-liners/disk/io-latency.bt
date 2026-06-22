@@ -1,0 +1,19 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Block I/O latency histogram
+ * Domain:   disk
+ * Usage:    sudo bpftrace one-liners/disk/io-latency.bt
+ * Reaches for this when: "Is the disk slow?"
+ */
+BEGIN { printf("Block I/O latency. Run a disk-intensive workload to populate.\n"); }
+tracepoint:block:block_rq_issue
+{
+    @s[args->bytes] = nsecs;
+}
+tracepoint:block:block_rq_complete
+/@s[args->bytes]/
+{
+    $us = (nsecs - @s[args->bytes]) / 1000;
+    @usecs = hist($us);
+    delete(@s[args->bytes]);
+}

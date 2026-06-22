@@ -1,0 +1,27 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Generic function latency histogram
+ * Domain:   latency
+ * Usage:    sudo FUNC=vfs_read bpftrace one-liners/latency/latency.bt
+ * Reaches for this when: "How long does this function take?"
+ *
+ * Template — replace FUNC with any kernel function symbol.
+ * Use bpftrace -l to find available functions.
+ */
+BEGIN
+{
+    $func = $FUNC ?: "vfs_read";
+    printf("Latency histogram for %s (μs). Edit the FUNC env var to change.\n", $func);
+}
+
+kprobe:$FUNC ?: vfs_read
+{
+    @s[tid] = nsecs;
+}
+
+kretprobe:$FUNC ?: vfs_read
+/@s[tid]/
+{
+    @usecs = hist((nsecs - @s[tid]) / 1000);
+    delete(@s[tid]);
+}

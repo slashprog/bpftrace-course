@@ -1,0 +1,35 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Conditional logic — if / else
+ * Lecture:  5.1
+ * Usage:    sudo bpftrace 05-01-conditional.bt
+ *
+ * Use conditionals to filter or branch on values. Common patterns:
+ *
+ *   - Filter:  kprobe:FUNC /condition/ { ... }
+ *   - Branch:  kprobe:FUNC { if (cond) { ... } else { ... } }
+ *   - Inline:  $result = (cond) ? value_if_true : value_if_false;
+ */
+
+BEGIN
+{
+    printf("Classifying vfs_read sizes. Read files to see categorization.\n");
+}
+
+kprobe:vfs_read
+{
+    // Inline ternary: classify the read size
+    $category = arg2 < 1024 ? "small" : arg2 < 65536 ? "medium" : "large";
+
+    @reads_by_size[$category] = count();
+    @reads_by_size_by_comm[$category, comm] = count();
+}
+
+END
+{
+    printf("\n=== Reads classified by size ===\n");
+    print(@reads_by_size);
+
+    printf("\n=== Same, broken down by process ===\n");
+    print(@reads_by_size_by_comm);
+}

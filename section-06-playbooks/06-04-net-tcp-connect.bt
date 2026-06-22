@@ -1,0 +1,39 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.4: Network — TCP connect events with target
+ *
+ * The story: "What external services is my app talking to?"
+ * The script: trace every new TCP connection (active side),
+ *             print the process and target IP:port.
+ *
+ * Usage:    sudo bpftrace 06-04-net-tcp-connect.bt
+ */
+
+BEGIN
+{
+    printf("Tracing new TCP connections. Use the network in another terminal.\n");
+    printf("  curl http://example.com\n");
+    printf("  nc -zv 8.8.8.8 53\n");
+}
+
+kprobe:tcp_connect
+{
+    // With BTF, args->sk is a real struct sock pointer
+    $daddr = args->sk->__sk_common->skc_daddr;
+    $dport = args->sk->__sk_common->skc_dport;
+
+    printf("%-16s (pid %-6d) → %s:%d\n",
+        comm, pid, ntop(2, $daddr), ntohs($dport));
+
+    @conns_by_dest[ntop(2, $daddr)] = count();
+    @conns_by_proc[comm] = count();
+}
+
+END
+{
+    printf("\n=== Top destination IPs ===\n");
+    print(@conns_by_dest);
+
+    printf("\n=== Top processes by connection count ===\n");
+    print(@conns_by_proc);
+}

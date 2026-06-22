@@ -1,0 +1,14 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    vfs_read latency histogram
+ * Domain:   filesystem
+ * Usage:    sudo bpftrace one-liners/filesystem/read-latency.bt
+ * Reaches for this when: "Is file I/O slow?"
+ */
+BEGIN { printf("vfs_read latency (μs). Read files to see histogram populate.\n"); }
+kprobe:vfs_read    { @s[tid] = nsecs; }
+kretprobe:vfs_read /@s[tid]/
+{
+    @usecs = hist((nsecs - @s[tid]) / 1000);
+    delete(@s[tid]);
+}

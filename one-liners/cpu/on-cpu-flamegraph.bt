@@ -1,0 +1,13 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    On-CPU sample for flame graphs
+ * Domain:   cpu
+ * Usage:    sudo bpftrace one-liners/cpu/on-cpu-flamegraph.bt > out.folded
+ *           flamegraph.pl out.folded > flame.svg
+ * Reaches for this when: "Where is CPU being spent?"
+ */
+BEGIN { printf("Sampling on-CPU stacks at 99Hz. Ctrl-C to stop.\n"); }
+profile:hz:99
+{
+    @[kstack] = count();
+}

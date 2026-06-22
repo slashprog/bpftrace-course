@@ -1,0 +1,51 @@
+#!/usr/bin/env bpftrace
+/*
+ * Capstone Phase 4: Verify the fix
+ *
+ * The story: "I removed the suspect file read. Did it actually
+ *            fix the latency problem?"
+ * The approach: re-run the same triage script, compare distributions
+ *               before and after.
+ *
+ * Usage:    sudo bpftrace 09-05-verify-fix.bt
+ *
+ * Before fix: histogram clusters at 50,000+ μs (the slow read)
+ * After fix:  histogram clusters at < 1,000 μs (normal)
+ *
+ * The fix in the simulated environment: edit slow-api.sh and remove
+ * the `cat /var/log/syslog > /dev/null` line, then restart.
+ */
+
+BEGIN
+{
+    printf("VERIFY PHASE 4: Comparing latency distributions.\n");
+    printf("After the fix, the histogram should shift dramatically left.\n");
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $us = (nsecs - @start[tid]) / 1000;
+    @latency_pre_fix = hist($us);  // run BEFORE the fix
+    @latency_post_fix = hist($us); // run AFTER the fix
+    delete(@start[tid]);
+}
+
+END
+{
+    printf("\n=== Latency histogram (should shift left after fix) ===\n");
+    print(@latency_pre_fix);
+    print(@latency_post_fix);
+
+    printf("\nBefore/after comparison:\n");
+    printf("  - Same command, same workload, just the fix in place\n");
+    printf("  - If the histogram is dramatically faster, the fix worked\n");
+    printf("  - If it's the same, the cause was something else — go back to phase 1\n");
+    printf("\nThis is the loop: Triage → Drill-down → Root cause → Verify.\n");
+    printf("You now have a methodology, not just a script.\n");
+}

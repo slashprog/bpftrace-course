@@ -1,0 +1,49 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    quantile() and percentiles
+ * Lecture:  3.9
+ * Usage:    sudo bpftrace 03-09-quantile.bt
+ *
+ * quantile() computes approximate percentiles in-kernel.
+ *
+ *   @ = quantize(value);    // p0, p10, p25, p50, p75, p90, p99, p100
+ *   @ = quantize(value, 100); // 100 finer buckets
+ *
+ * For latency work, "p99" (99th percentile) is the most
+ * useful — it shows the worst 1% of latencies, which is
+ * what users actually feel.
+ *
+ * Caveat: quantize() uses a streaming algorithm, so the
+ * values are approximate. For exact percentiles, log the
+ * raw values and post-process.
+ */
+
+BEGIN
+{
+    printf("Computing p50/p90/p99 latencies for vfs_read.\n");
+    printf("Try: cat /var/log/syslog in another terminal.\n");
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $us = (nsecs - @start[tid]) / 1000;
+    @ = quantize($us);
+    delete(@start[tid]);
+}
+
+END
+{
+    printf("\n=== vfs_read latency percentiles (μs) ===\n");
+    print(@);
+
+    printf("\nReading a quantize() output:\n");
+    printf("  ~p50 = the median latency\n");
+    printf("  ~p99 = the 99th percentile (the user-visible 'slow')\n");
+    printf("  ~max = the slowest single read\n");
+}

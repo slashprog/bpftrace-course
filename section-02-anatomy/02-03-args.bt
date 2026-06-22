@@ -1,0 +1,46 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Function arguments — arg0..argN
+ * Lecture:  2.3
+ * Usage:    sudo bpftrace 02-03-args.bt
+ *
+ * Every kernel function is called with arguments. bpftrace
+ * exposes them as arg0, arg1, ... argN. You can also use
+ * sarg0..sargN for "signed" interpretation (relevant for
+ * kernel return codes that can be negative).
+ *
+ * The first argument to a function is arg0. The number of
+ * arguments is function-specific. Use bpftrace -lv to see:
+ *
+ *   sudo bpftrace -lv 'kprobe:vfs_read'
+ *   sudo bpftrace -lv 'kprobe:tcp_connect'
+ *
+ * For tracepoints, bpftrace gives you named accessors:
+ *
+ *   sudo bpftrace -lv 'tracepoint:syscalls:sys_enter_openat'
+ *   // args->filename, args->flags, args->mode
+ */
+
+BEGIN
+{
+    printf("Tracing vfs_read... reading from a file in another terminal will trigger this.\n");
+    printf("Try: cat /etc/hostname\n");
+}
+
+kprobe:vfs_read
+{
+    // vfs_read signature: ssize_t vfs_read(struct file *file, char *buf, size_t count, loff_t *pos)
+    // arg0 = struct file *file   (a pointer — not directly useful as a number)
+    // arg1 = char *buf           (a pointer)
+    // arg2 = size_t count        (the number of bytes requested)
+    // arg3 = loff_t *pos         (a pointer to the file offset)
+
+    @reads[comm] = count();
+    @total_bytes_requested[comm] = sum(arg2);
+}
+
+END
+{
+    printf("\n=== Total bytes requested per process ===\n");
+    print(@total_bytes_requested);
+}

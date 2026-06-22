@@ -1,0 +1,47 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    tracepoint — stable, supported kernel events
+ * Lecture:  4.6
+ * Usage:    sudo bpftrace 04-06-tracepoint.bt
+ *
+ * Tracepoints are stable, named, well-typed kernel events.
+ * They're the "supported" way to trace the kernel — used by
+ * perf, ftrace, and all the production tools.
+ *
+ * List available tracepoints:
+ *   sudo bpftrace -l 'tracepoint:syscalls:*' | head
+ *
+ * View a tracepoint's arguments:
+ *   sudo bpftrace -lv 'tracepoint:syscalls:sys_enter_openat'
+ *   // shows: filename (const char *), flags (int), mode (umode_t)
+ *
+ * The argument accessors in bpftrace are args->FIELDNAME.
+ */
+
+BEGIN
+{
+    printf("Tracing openat() calls. Open some files in another terminal:\n");
+    printf("  cat /etc/hostname\n");
+    printf("  less /var/log/syslog\n");
+}
+
+tracepoint:syscalls:sys_enter_openat
+{
+    // str() converts a kernel string pointer to a C string
+    @opens[comm, str(args->filename)] = count();
+}
+
+tracepoint:syscalls:sys_enter_close
+{
+    // args->fd is the file descriptor being closed
+    @closes[comm] = count();
+}
+
+END
+{
+    printf("\n=== Top 10 most-opened files (by process) ===\n");
+    print(@opens, 10);
+
+    printf("\n=== Closes by process ===\n");
+    print(@closes);
+}

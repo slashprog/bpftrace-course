@@ -1,0 +1,71 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    The 5-minute "instant gratification" demo
+ * Lecture:  1.11
+ * Usage:    sudo bpftrace 01-11-instant-gratification.bt
+ *
+ * The story: a web server (or your shell script) is "slow."
+ * You don't know why. You open this script, run it, and in
+ * 30 seconds you know.
+ *
+ * What it does: traces every vfs_read() call, records the
+ * start time, and on the return event computes the duration
+ * and puts it in a histogram. After 30 seconds, Ctrl-C and
+ * you see: which process is doing the slow reads, and how slow.
+ *
+ * This is the moment students fall in love with bpftrace.
+ */
+
+BEGIN
+{
+    printf("==============================================\n");
+    printf("  Mystery Latency Hunter v1.0\n");
+    printf("==============================================\n");
+    printf("Tracing all file reads. Watch the histogram...\n");
+    printf("Open a slow file in another terminal to see it spike:\n");
+    printf("  tail -f /var/log/syslog\n");
+    printf("  cat /var/log/kern.log\n");
+    printf("  dd if=/dev/zero of=/tmp/bigfile bs=1M count=100\n");
+    printf("  cat /tmp/bigfile > /dev/null\n");
+    printf("\nPress Ctrl-C after ~30 seconds to see results.\n");
+    printf("==============================================\n\n");
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    // Compute duration in microseconds
+    $duration_us = (nsecs - @start[tid]) / 1000;
+
+    // Aggregate per-process latency histogram
+    @usecs[comm] = hist($duration_us);
+
+    // Also count total reads and total bytes
+    @reads[comm] = count();
+    @bytes[comm] = sum(retval > 0 ? retval : 0);
+
+    delete(@start[tid]);
+}
+
+END
+{
+    printf("\n==============================================\n");
+    printf("  Results — slow file reads (in microseconds)\n");
+    printf("==============================================\n");
+    printf("\nTop processes by total bytes read:\n");
+    print(@bytes);
+    printf("\nTop processes by read count:\n");
+    print(@reads);
+    printf("\nLatency histograms per process (μs):\n");
+    print(@usecs);
+    printf("\nLook for:\n");
+    printf("  - Processes with long tails in the histogram (the slow ones)\n");
+    printf("  - High @bytes values (the heavy readers)\n");
+    printf("  - High @reads values (the chatty readers)\n");
+    printf("==============================================\n");
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Who is opening this file?
+ * Domain:   filesystem
+ * Usage:    sudo bpftrace one-liners/filesystem/who-opens.bt
+ * Reaches for this when: "What process is touching this config file?"
+ * Tip:      pipe to grep:  sudo bpftrace ... | grep /etc/passwd
+ */
+BEGIN { printf("Tracing all file opens. Use grep to filter:\n  sudo bpftrace ... | grep /etc/passwd\n"); }
+tracepoint:syscalls:sys_enter_openat
+{
+    printf("%s (pid %d) opened: %s\n", comm, pid, str(args->filename));
+}

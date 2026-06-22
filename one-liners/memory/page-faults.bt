@@ -1,0 +1,12 @@
+#!/usr/bin/env bpftrace
+/*
+ * Title:    Page faults per process
+ * Domain:   memory
+ * Usage:    sudo bpftrace one-liners/memory/page-faults.bt
+ * Reaches for this when: "Memory looks fine but system is slow. Page faults?"
+ */
+BEGIN { printf("Counting page faults. Watch for high counts.\n"); }
+kprobe:handle_mm_fault
+{
+    @[comm] = count();
+}

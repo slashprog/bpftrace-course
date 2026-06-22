@@ -1,0 +1,57 @@
+#!/usr/bin/env bpftrace
+/*
+ * Capstone Phase 2: Drill-down
+ *
+ * The story: "I see vfs_read is slow. WHAT is being read?"
+ * The approach: trace the specific files being read, see which one
+ *               is the dominant cost.
+ *
+ * Usage:    sudo bpftrace 09-03-drill-down.bt
+ */
+
+BEGIN
+{
+    printf("DRILL-DOWN PHASE 2: What files is the API reading?\n");
+}
+
+tracepoint:syscalls:sys_enter_openat
+/pid == TARGET_PID || TARGET_PID == 0/
+{
+    @opens[comm, str(args->filename)] = count();
+}
+
+tracepoint:syscalls:sys_enter_read
+/pid == TARGET_PID || TARGET_PID == 0/
+{
+    @reads_total[comm] = count();
+}
+
+kretprobe:vfs_read
+/@start[tid]/
+{
+    $us = (nsecs - @start[tid]) / 1000;
+    @read_latency = hist($us);
+    delete(@start[tid]);
+}
+
+kprobe:vfs_read
+{
+    @start[tid] = nsecs;
+}
+
+END
+{
+    printf("\n=== Files opened by the API process ===\n");
+    print(@opens);
+
+    printf("\n=== Total reads by the API process ===\n");
+    print(@reads_total);
+
+    printf("\n=== vfs_read latency ===\n");
+    print(@read_latency);
+
+    printf("\nDrill-down conclusions to draw:\n");
+    printf("  - One file being read on every request? That's the prime suspect.\n");
+    printf("  - A log file? Configuration file? Status file?\n");
+    printf("  - Time to look at the source code or strace to confirm.\n");
+}

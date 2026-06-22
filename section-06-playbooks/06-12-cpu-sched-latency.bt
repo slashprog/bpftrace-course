@@ -1,0 +1,45 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.12: CPU — scheduler latency
+ *
+ * The story: "My thread is ready to run but not getting CPU.
+ *            How long is it waiting?"
+ * The script: trace wakeup → schedule latency.
+ *
+ * Usage:    sudo bpftrace 06-12-cpu-sched-latency.bt
+ */
+
+BEGIN
+{
+    printf("Tracing scheduler latency. Time between wakeup and actual CPU.\n");
+}
+
+kprobe:try_to_wake_up
+{
+    // Record when a task is woken up
+    @wakeup_time[args->p] = nsecs;
+}
+
+kprobe:finish_task_switch
+{
+    // A task just started running on CPU
+    $prev_pid = args->prev_pid;
+
+    if (@wakeup_time[$prev_pid] > 0) {
+        $latency_us = (nsecs - @wakeup_time[$prev_pid]) / 1000;
+        @sched_latency[args->prev_comm] = hist($latency_us);
+        delete(@wakeup_time[$prev_pid]);
+    }
+}
+
+END
+{
+    printf("\n=== Scheduler latency per process (μs) ===\n");
+    print(@sched_latency);
+
+    printf("\nReading the output:\n");
+    printf("  - Tight histogram near zero: good (CPU is responsive)\n");
+    printf("  - Long tail (1ms+): CPU contention or scheduling issues\n");
+    printf("  - If only one process is slow: that process's priority/nice is wrong\n");
+    printf("  - If all processes are slow: CPU oversubscription\n");
+}

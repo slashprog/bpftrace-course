@@ -1,0 +1,69 @@
+#!/usr/bin/env bpftrace
+/*
+ * Playbook 6.17: Security — unexpected syscalls
+ *
+ * The story: "Is anything doing something weird? Catch privilege
+ *            escalation attempts, unexpected file access, etc."
+ * The script: trace a set of "interesting" syscalls and print
+ *             each invocation with full context.
+ *
+ * Usage:    sudo bpftrace 06-17-security-syscalls.bt
+ */
+
+BEGIN
+{
+    printf("Watching for security-relevant syscalls. Will print each event.\n");
+    printf("  - setuid/setgid (privilege change)\n");
+    printf("  - ptrace (process debugging — potential attack vector)\n");
+    printf("  - mount (filesystem changes)\n");
+    printf("  - init_module / finit_module (kernel module loading)\n");
+    printf("  - execveat (new process — common attack entry)\n");
+}
+
+tracepoint:syscalls:sys_enter_setuid
+{
+    printf("[SETUID]  %s (pid %d) → uid %d\n", comm, pid, args->uid);
+    @setuids[comm] = count();
+}
+
+tracepoint:syscalls:sys_enter_setgid
+{
+    printf("[SETGID]  %s (pid %d) → gid %d\n", comm, pid, args->gid);
+    @setgids[comm] = count();
+}
+
+tracepoint:syscalls:sys_enter_ptrace
+{
+    printf("[PTRACE]  %s (pid %d) ptrace request=%d target=%d\n",
+        comm, pid, args->request, args->pid);
+    @ptraces[comm] = count();
+}
+
+tracepoint:syscalls:sys_enter_mount
+{
+    printf("[MOUNT]   %s (pid %d) %s\n", comm, pid, str(args->source));
+    @mounts[comm] = count();
+}
+
+tracepoint:syscalls:sys_enter_init_module
+{
+    printf("[KMOD]    %s (pid %d) loading kernel module\n", comm, pid);
+    @modules[comm] = count();
+}
+
+tracepoint:syscalls:sys_enter_finit_module
+{
+    printf("[KMOD]    %s (pid %d) loading kernel module from fd %d\n",
+        comm, pid, args->fd);
+    @modules[comm] = count();
+}
+
+END
+{
+    printf("\n=== Security event summary ===\n");
+    printf("setuid calls:    %d\n", @setuids);
+    printf("setgid calls:    %d\n", @setgids);
+    printf("ptrace calls:    %d\n", @ptraces);
+    printf("mount calls:     %d\n", @mounts);
+    printf("module loads:    %d\n", @modules);
+}
