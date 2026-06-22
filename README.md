@@ -10,7 +10,7 @@ Source code, scripts, and lab materials for the training course **Linux Observab
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/<your-org>/bpftrace-course.git
+git clone https://github.com/slashprog/bpftrace-course.git
 cd bpftrace-course
 
 # 2. Run the lab setup (idempotent — safe to re-run)
@@ -62,8 +62,8 @@ bpftrace-course/
 The course is built and tested on:
 
 - **Host OS:** Any (Windows, macOS, Linux) — see below
-- **Guest OS:** Ubuntu 24.04 LTS
-- **Kernel:** 6.x (any 5.15+ works)
+- **Guest OS:** Ubuntu 26.04 LTS
+- **Kernel:** 7.x (any 5.15+ works)
 - **bpftrace:** ≥ 0.20
 - **Recommended VM:** Oracle VirtualBox, 4 GB RAM, 2 vCPUs
 
@@ -94,8 +94,8 @@ Detailed walkthrough: [`docs/setup.md`](docs/setup.md)
 This repo is pinned to:
 
 - **bpftrace ≥ 0.20** (latest stable)
-- **Linux kernel 6.x** (Ubuntu 24.04's default)
-- **LLVM 14+** (bpftrace's compilation backend)
+- **Linux kernel 7.x** (Ubuntu 26.04's default)
+- **LLVM 21+** (bpftrace's compilation backend)
 
 Most scripts work on kernel 4.19+ and bpftrace 0.13+, but if you hit a syntax error, the first thing to check is your bpftrace version: `bpftrace --version`.
 
